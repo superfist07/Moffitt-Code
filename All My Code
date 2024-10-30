@@ -1,0 +1,288 @@
+rgbImage = imread("francaSS.png")
+imshow(rgbImage)
+
+[~, q] = ginput(9)
+
+convertCoords(q)
+
+function[y] = convertCoords(q)
+    y = (558.0416 - q) * 25.0/(558.0416 - 472.2660)
+end
+
+
+clc;clear;close all;
+
+load("deltaIC50timearray.mat");
+load("xData.mat")
+
+xfit = 1:0.5:325;
+
+
+bestslopeParameters = lsqcurvefit(@slopeFnc, [0, 0], xdata, deltaIC50timearray', [-1000, 0], [1000,0]);
+IC50m = bestslopeParameters(1, 1)
+IC50b = bestslopeParameters(1, 2)
+plot(xdata,deltaIC50timearray, ".", 'MarkerSize', 25); hold on;
+plot(xfit, slopeFnc(bestslopeParameters, xfit), "-", 'LineWidth', 2);
+
+xlabel("[olaparib] µM")
+ylabel("\Delta IC50 /\Delta time")
+
+save("IC50parameters.mat", "IC50m", "IC50b")
+
+
+function [DIPRate] = DIPConversionFnc(T, totalData)
+    DT = 3;
+    g0 = log(2)/DT;
+    s = totalData/100;
+    DIPRate = log(s .* exp(g0*T))/T;
+end
+
+% The actual formula is 1/T * S(x) * e^((ln(2)/DT) * T)
+    % T = the time of measurement
+    % S(x) = Cell Viability Percentage
+    % DT = Doubling Time
+
+
+function y = exponentFnc(parametersSlope, xdata)
+    y = parametersSlope(1) * parametersSlope(2) .^ xdata;
+end
+
+xdata = [1.0000, 2.5000, 5.0000, 10.0000, 20.0000, 40.0000, 80.0000, 160.0000, 320.0000];
+
+ydata1 = [96.9680, 38.9189, 13.5224, 7.1733, 7.1733, 8.0803, 7.6268, 7.1733, 2.6382];
+ydata2 = [98.7821, 61.5943, 29.3952, 15.7899, 13.5224, 13.0689, 11.2548, 9.4408, 3.9987];
+ydata3 = [101.3158, 71.0527, 40.7895, 23.2456, 16.6667, 14.0351, 9.6491, 8.3333, 1.7544];
+ydata4 = [103.0702, 75.8772, 46.9298, 24.5614, 14.9123, 9.2105, 10.0877, 7.8947, 2.193];
+ydata5 = [117.1053, 106.579, 84.6492, 56.579, 32.0176, 19.2983, 13.1579, 6.579, 0.8772];
+ydata6 = [122.3645, 109.6663, 86.5373, 53.8847, 34.8373, 22.139, 15.3364, 8.5338, 3.0917];
+ydata7 = [130.5277, 115.1084, 96.5145, 75.1996, 48.4426, 30.7557, 18.9645, 9.8943, 3.0917];
+ydata8 = [115.5619, 102.8636, 93.3399, 75.6531, 50.7101, 35.7443, 23.9531, 11.2548, 3.5452];
+ydata9 = [116.0154, 110.5733, 103.3171, 89.7119, 67.9434, 51.1636, 33.9303, 15.7899, 3.9987];
+ydata10 = [118.7364, 111.0268, 108.3057, 97.875, 77.0136, 58.4198, 42.5469, 20.325, 3.5452];
+
+totalData = [ydata1; ydata2; ydata3; ydata4; ydata5; ydata6; ydata7; ydata8; ydata9; ydata10];
+
+bestParameters1 = lsqcurvefit(@hillFnc, [0, 0, 0], xdata, ydata1)
+bestParameters2 = lsqcurvefit(@hillFnc, [0, 0, 0], xdata, ydata2)
+bestParameters3 = lsqcurvefit(@hillFnc, [0, 0, 0], xdata, ydata3)
+bestParameters4 = lsqcurvefit(@hillFnc, [0, 0, 0], xdata, ydata4)
+bestParameters5 = lsqcurvefit(@hillFnc, [0, 0, 0], xdata, ydata5)
+bestParameters6 = lsqcurvefit(@hillFnc, [0, 0, 0], xdata, ydata6)
+bestParameters7 = lsqcurvefit(@hillFnc, [0, 0, 0], xdata, ydata7)
+bestParameters8 = lsqcurvefit(@hillFnc, [0, 0, 0], xdata, ydata8)
+bestParameters9 = lsqcurvefit(@hillFnc, [0, 0, 0], xdata, ydata9)
+bestParameters10 = lsqcurvefit(@hillFnc, [0, 0, 0], xdata, ydata10)
+
+bestParametersViability = [bestParameters1; bestParameters2; bestParameters3; bestParameters4; bestParameters5; bestParameters6; bestParameters7; bestParameters8; bestParameters9; bestParameters10];
+
+save("bestParametersViability.mat", "bestParametersViability")
+save("xData.mat", "xdata")
+save("viabilityData.mat", "totalData")
+
+
+
+clc;clear; close all
+
+load("bestParametersViability.mat")
+load("viabilityData.mat")
+load("xdata.mat")
+
+resnormArray = zeros(10, 1);
+bestParametersDIP = zeros(10, 3);
+
+range = [ColorRange(green(), gold(), 10)];
+colororder(range)
+
+T = [6, 16, 39, 69, 119, 139, 179, 224, 271, 311];
+
+assumptionT = 9;
+xfit = 1:0.05:320;
+
+d = DIPConversionFnc(assumptionT, totalData);
+
+for n = 1:10
+    plot(xdata, d(n,:), ".", 'MarkerSize', 25); hold on;
+    [bestParameters, resnorm] = lsqcurvefit(@hillFnc, [d(n,1), d(n,end), 0], xdata, d(n,:));
+    resnormArray(n) = resnorm(1);
+    bestParametersDIP(n, 1) = bestParameters(1);
+    bestParametersDIP(n, 2) = bestParameters(2);
+    bestParametersDIP(n, 3) = bestParameters(3);
+    %plot(xdata,bestParameters(1, 3), ".", 'MarkerSize', 25); hold on;
+    plot(xfit, hillFnc(bestParameters, xfit), "-", 'LineWidth', 2); hold on;
+end
+
+xlabel("[olaparib] µM")
+ylabel("DIP Rate")
+set(gca,"xscale", "log")
+X = [0, xdata];
+b1 = bestParametersDIP(:, 1);
+b2 = bestParametersDIP(:, 2);
+IC50 = bestParametersDIP(:, 3);
+%figure(1)
+%plot(pretreatedDose,bestParametersDIP(:, 1), ".", 'MarkerSize', 25);
+%figure(2)
+%plot(pretreatedDose,bestParametersDIP(:, 2), ".", 'MarkerSize', 25);
+%figure(3)
+%plot(X,IC50, ".", 'MarkerSize', 25);
+%xlabel("Pre-Treated Dose")
+%ylabel("IC50 Value")
+
+
+
+deltaIC50timearray = zeros(length(X) - 1, 1);
+
+for i = 2:length(X)
+    deltaIC50timearray(i - 1) = (IC50(i) - IC50(i - 1))/(T(i) - T(i - 1));
+end
+
+%plot(xdata,deltaIC50timearray, ".", 'MarkerSize', 25);
+
+b1avg = (b1(1)+b1(2)+b1(3)+b1(4)+b1(5)+b1(6)+b1(7)+b1(8)+b1(9)+b1(10))/10;
+b2avg = (b2(1)+b2(2)+b2(3)+b2(4)+b2(5)+b2(6)+b2(7)+b2(8)+b2(9)+b2(10))/10;
+
+save("deltaIC50timearray.mat", "deltaIC50timearray")
+save("parameterAvg.mat", "b1avg", "b2avg")
+
+function F = hillFnc(parameters, xdata)
+    F = (xdata * parameters(2) + parameters(3) * parameters(1))./(xdata + parameters(3));
+end
+
+load("bestParametersViability.mat");
+xdataw0 = [0.0000, 1.0000, 2.5000, 5.0000, 10.0000, 20.0000, 40.0000, 80.0000, 160.0000, 320.0000];
+IC50viable = zeros(1, 10);
+for n = 1:10
+    IC50viable(1, n) = bestParametersViability(n, 3)
+end
+
+xfit = 1:0.5:325;
+
+
+bestslopeParameters = lsqcurvefit(@slopeFnc, [0, 0], xdataw0, IC50viable);
+IC50mviable = bestslopeParameters(1, 1)
+IC50bviable = bestslopeParameters(1, 2)
+plot(xdataw0,IC50viable, ".", 'MarkerSize', 25); hold on;
+plot(xfit, slopeFnc(bestslopeParameters, xfit), "-", 'LineWidth', 2);
+
+xlabel("[olaparib] µM")
+ylabel("\Delta IC50 /\Delta time")
+
+save("IC50viableparameters.mat", "IC50mviable", "IC50bviable")
+
+
+clc;clear;close all;
+
+load("parameterAvg.mat")
+load("IC50parameters.mat")
+load("IC50viableparameters.mat")
+
+doubleSpot = 0;
+
+% set tolerances for ODE model
+tolerances = 1e-6;
+options = odeset('RelTol',tolerances,'AbsTol',tolerances);
+
+range = [ColorRange(green(), gold(), 5)];
+%colororder(range)
+
+% initial condition:
+initial_IC50 = 0.5;
+
+% time scale:
+T=75;    
+tspan = 0:(T/1000):(T);
+
+% dip parameters:
+b1 = b1avg;
+b2 = b2avg;
+x = 10;
+m = IC50m;
+b = IC50b;
+%alpha = 0; 
+ 
+doubleSpotarray = zeros(19, 1);
+
+% UA_evolve(t,y,x,b1,b2,alpha)
+n = 0
+for x = [1, 2.5, 5, 25, 125]
+    n = n + 1;
+    [time,outputs] = ode45(@(t,y) UA_evolve(t,y,x,b1,b2,m,b),tspan,[1e7,0,initial_IC50],options);
+    tumor_size = outputs(:,1) + outputs(:,2); % c1 + c2
+    IC50 = outputs(:,3);
+    figure(1);
+    plot(time, tumor_size,"-","LineWidth", 3, "Color", range(n, :)); hold on;
+    doubleSpot = find(tumor_size >= 2e7, 1);
+    doubleSpotarray(n) = time(doubleSpot)
+    plot(time(doubleSpot), tumor_size(doubleSpot), ".k", "MarkerSize", 25); hold on;
+end
+
+
+%set(gca, 'XScale', 'log');
+set(gca,'YScale','log');
+
+% cbh = colorbar('XTick', [1, 2.5, 5, 25, 125], 'XScale', 'log');
+% colormap(range);
+% clim([1, 125])
+
+
+ylim([1e5, 1e11]);
+xlim([0,max(time)]);
+xlabel('Time (days)')
+ylabel('Tumor Size')
+    
+
+%figure(2);
+%plot(time, IC50,"-","LineWidth", 3,"Color",[0,0,1]);
+%xlabel('time (days)')
+%ylabel('IC50')
+
+ % xarray = 0:300;
+ % for x = xarray
+ %     x
+ %     [time,outputs] = ode45(@(t,y) UA_evolve(t,y,x,b1,b2,m,b),tspan,[1e7,0,initial_IC50],options);
+ %     tumor_size = outputs(:,1) + outputs(:,2); % c1 + c2
+ %     doubleSpot = find(tumor_size >= 2e7, 1);
+ %     doubleSpotarray(x + 1) = time(doubleSpot);
+ % end
+ % 
+ % figure(3);
+ % plot(xarray, doubleSpotarray, "-", "LineWidth", 3);
+ % xlabel("Dose")
+ % ylabel("TTD (days)")
+
+save("doubleSpotarray.mat", "doubleSpotarray")
+
+function y = slopeFnc(parametersSlope, xdata)
+    y = parametersSlope(1) * xdata + parametersSlope(2);
+end
+
+function [ydot] = UA_evolve(t,y,x,b1,b2,m,b)
+    c1 = y(1); % unaffected cells
+    c2 = y(2); % affected cells
+    IC50 = y(3); % IC50(t)
+
+    % IC50 = koff / kon
+    %      or, koff = IC50*kon
+
+    kon = 1;
+
+    koff = IC50*kon;
+
+    % (doesn't include h)
+    ydot(1,1) = (b1 - kon*(x))*c1 + (koff*c2); %(unaffected)
+    ydot(2,1) = (b2 - koff)*c2 + (kon*(x)*c1); %(affected)
+    ydot(3,1) = m * x + b;
+
+
+
+    v=c1+c2;
+    %if (v>15)
+     %   ydot(1,1) = 0;
+     %   ydot(2,1) = 0;
+    %end
+    
+end
+
+
+
+
+
